@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  ADMIN
+  SUPERVISOR
+  STUDENT
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  UNAVAILABLE
+  BOOKED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum RevisionStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+}
+
+model User {
+  id                 String             @id @default(uuid()) @db.Uuid
+  fullName           String
+  email              String             @unique
+  role               UserRole
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  supervisedStudents Supervision[]      @relation("Supervisor")
+  studentSupervision Supervision?       @relation("Student")
+  availabilitySlots  AvailabilitySlot[]
+  uploadedDocuments  Document[]         @relation("DocumentUploader")
+  changeLogs         ChangeLog[]
+
+  @@map("users")
+}
+
+model Supervision {
+  id           String     @id @default(uuid()) @db.Uuid
+  supervisorId String     @db.Uuid
+  studentId    String     @unique @db.Uuid
+  startedAt    DateTime   @default(now())
+  supervisor   User       @relation("Supervisor", fields: [supervisorId], references: [id], onDelete: Restrict)
+  student      User       @relation("Student", fields: [studentId], references: [id], onDelete: Restrict)
+  sessions     Session[]
+  documents    Document[]
+
+  @@map("supervisions")
+}
+
+model AvailabilitySlot {
+  id           String             @id @default(uuid()) @db.Uuid
+  supervisorId String             @db.Uuid
+  startsAt     DateTime
+  endsAt       DateTime
+  status       AvailabilityStatus @default(AVAILABLE)
+  supervisor   User               @relation(fields: [supervisorId], references: [id], onDelete: Cascade)
+
+  @@index([supervisorId, startsAt])
+  @@map("availability_slots")
+}
+
+model Session {
+  id            String         @id @default(uuid()) @db.Uuid
+  supervisionId String         @db.Uuid
+  scheduledAt   DateTime
+  status        SessionStatus  @default(SCHEDULED)
+  createdAt     DateTime       @default(now())
+  supervision   Supervision    @relation(fields: [supervisionId], references: [id], onDelete: Cascade)
+  revisionItems RevisionItem[]
+  documents     Document[]
+
+  @@index([supervisionId, scheduledAt])
+  @@map("sessions")
+}
+
+model RevisionItem {
+  id          String         @id @default(uuid()) @db.Uuid
+  sessionId   String         @db.Uuid
+  description String
+  status      RevisionStatus @default(OPEN)
+  createdAt   DateTime       @default(now())
+  session     Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("revision_items")
+}
+
+model Document {
+  id            String      @id @default(uuid()) @db.Uuid
+  supervisionId String      @db.Uuid
+  sessionId     String?     @db.Uuid
+  uploadedById  String      @db.Uuid
+  fileName      String
+  storageKey    String
+  mimeType      String
+  createdAt     DateTime    @default(now())
+  supervision   Supervision @relation(fields: [supervisionId], references: [id], onDelete: Cascade)
+  session       Session?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  uploadedBy    User        @relation("DocumentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([supervisionId])
+  @@index([sessionId])
+  @@map("documents")
+}
+
+model ChangeLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  entityType String
+  entityId   String   @db.Uuid
+  action     String
+  changes    Json?
+  createdAt  DateTime @default(now())
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@map("change_logs")
+}
