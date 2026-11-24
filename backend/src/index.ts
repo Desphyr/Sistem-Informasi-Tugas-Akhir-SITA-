@@ -1,34 +1,71 @@
 import { createServer } from "node:http";
-import { PrismaClient } from "@prisma/client";
+import { fileURLToPath } from "node:url";
+import { config } from "./config/env.js";
+import { prisma } from "./config/prisma.js";
+import { handleAuthRoutes } from "./modules/auth/auth.routes.js";
+import { sendJson } from "./utils/response.js";
 
-const prisma = new PrismaClient();
-const port = Number(process.env.PORT ?? 3000);
+export function createApplicationServer() {
+  return createServer(async (request, response) => {
+    try {
+      // 1. Dispatch Auth Routes (/auth/*, /api/auth/*)
+      const handledByAuth = await handleAuthRoutes(request, response);
+      if (handledByAuth) {
+        return;
+      }
 
-if (!Number.isInteger(port) || port < 1 || port > 65535) {
-  throw new Error("PORT must be an integer between 1 and 65535.");
+      // 2. Health check endpoint
+      if (request.method === "GET" && request.url === "/health") {
+        try {
+          await prisma.$queryRaw`SELECT 1`;
+          sendJson(response, 200, {
+            statusCode: 200,
+            message: "SITA backend health check ok.",
+            data: { status: "ok", database: "connected" },
+          });
+        } catch (error: unknown) {
+          console.error("Health check database query failed:", error);
+          sendJson(response, 503, {
+            statusCode: 503,
+            error: "Service Unavailable",
+            message: "Database connection failed.",
+            data: { status: "error", database: "disconnected" },
+          });
+        }
+        return;
+      }
+
+      // 3. Fallback 404 Not Found
+      sendJson(response, 404, {
+        statusCode: 404,
+        error: "Not Found",
+        message: `Endpoint ${request.method} ${request.url} tidak ditemukan.`,
+      });
+    } catch (unexpectedError: unknown) {
+      console.error("Unexpected server error:", unexpectedError);
+      sendJson(response, 500, {
+        statusCode: 500,
+        error: "Internal Server Error",
+        message: "Terjadi kesalahan internal pada server.",
+      });
+    }
+  });
 }
 
-const server = createServer(async (request, response) => {
-  if (request.method !== "GET" || request.url !== "/health") {
-    response.writeHead(404, { "content-type": "application/json" });
-    response.end(JSON.stringify({ error: "Not Found" }));
-    return;
-  }
+const server = createApplicationServer();
 
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    response.writeHead(200, { "content-type": "application/json" });
-    response.end(JSON.stringify({ status: "ok", database: "connected" }));
-  } catch (error: unknown) {
-    console.error("Health check database query failed:", error);
-    response.writeHead(503, { "content-type": "application/json" });
-    response.end(JSON.stringify({ status: "error", database: "disconnected" }));
-  }
-});
+const isMainModule = Boolean(
+  process.argv[1] &&
+    (fileURLToPath(import.meta.url) === process.argv[1] ||
+      process.argv[1].endsWith("src/index.ts") ||
+      process.argv[1].endsWith("dist/src/index.js"))
+);
 
-server.listen(port, "0.0.0.0", () => {
-  console.info(`SITA backend listening on port ${port}.`);
-});
+if (isMainModule && process.env.NODE_ENV !== "test") {
+  server.listen(config.port, "0.0.0.0", () => {
+    console.info(`SITA backend listening on port ${config.port}.`);
+  });
+}
 
 async function shutdown(): Promise<void> {
   server.close(async (error) => {
