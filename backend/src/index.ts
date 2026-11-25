@@ -4,6 +4,7 @@ import { config } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
 import { handleAuthRoutes } from "./modules/auth/auth.routes.js";
 import { handleAuthorizationRoutes } from "./modules/authorization/authorization.routes.js";
+import { handleAuditRoutes } from "./modules/audit/audit.routes.js";
 import { sendJson } from "./utils/response.js";
 
 export function createApplicationServer() {
@@ -21,7 +22,13 @@ export function createApplicationServer() {
         return;
       }
 
-      // 3. Health check endpoint
+      // 3. Dispatch Audit Routes (/api/audit/*)
+      const handledByAudit = await handleAuditRoutes(request, response);
+      if (handledByAudit) {
+        return;
+      }
+
+      // 4. Health check endpoint
       if (request.method === "GET" && request.url === "/health") {
         try {
           await prisma.$queryRaw`SELECT 1`;
@@ -42,7 +49,7 @@ export function createApplicationServer() {
         return;
       }
 
-      // 3. Fallback 404 Not Found
+      // 4. Fallback 404 Not Found
       sendJson(response, 404, {
         statusCode: 404,
         error: "Not Found",

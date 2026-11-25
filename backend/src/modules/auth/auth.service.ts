@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import type { UserRole } from "@prisma/client";
 import { prisma } from "../../config/prisma.js";
 import { config } from "../../config/env.js";
+import { auditService } from "../audit/audit.service.js";
 
 export interface SafeUser {
   id: string;
@@ -92,6 +93,18 @@ export class AuthService {
     };
 
     const tokens = this.generateToken(safeUser);
+
+    // Catat event LOGIN ke audit log — tanpa password, token, atau hash
+    await auditService.record({
+      actorId: safeUser.id,
+      entityType: "user",
+      entityId: safeUser.id,
+      action: "LOGIN",
+      changes: {
+        field: "session",
+        description: "Pengguna berhasil login",
+      },
+    });
 
     return {
       user: safeUser,

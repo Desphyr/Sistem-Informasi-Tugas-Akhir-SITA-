@@ -15,7 +15,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --import tsx test/auth.test.ts test/rbac.test.ts"
+    "test": "node --test --import tsx test/auth.test.ts test/rbac.test.ts test/audit.test.ts"
   },
   "dependencies": {
     "@prisma/client": "6.12.0",
