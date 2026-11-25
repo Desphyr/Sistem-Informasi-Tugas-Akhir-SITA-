@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { config } from "./config/env.js";
 import { prisma } from "./config/prisma.js";
 import { handleAuthRoutes } from "./modules/auth/auth.routes.js";
+import { handleAuthorizationRoutes } from "./modules/authorization/authorization.routes.js";
 import { sendJson } from "./utils/response.js";
 
 export function createApplicationServer() {
@@ -14,7 +15,13 @@ export function createApplicationServer() {
         return;
       }
 
-      // 2. Health check endpoint
+      // 2. Dispatch Authorization / RBAC Routes
+      const handledByRbac = await handleAuthorizationRoutes(request, response);
+      if (handledByRbac) {
+        return;
+      }
+
+      // 3. Health check endpoint
       if (request.method === "GET" && request.url === "/health") {
         try {
           await prisma.$queryRaw`SELECT 1`;

@@ -53,3 +53,6 @@ export async function requireAuth(
     return null;
   }
 }
+
+export { requireRole, requirePermission } from "../modules/authorization/authorization.middleware.js";
+
