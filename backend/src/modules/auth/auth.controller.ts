@@ -3,6 +3,7 @@ import { parseJsonBody, sendJson } from "../../utils/response.js";
 import { validateLoginInput } from "./auth.validation.js";
 import { authService } from "./auth.service.js";
 import { requireAuth, type AuthenticatedRequest } from "../../middleware/auth.middleware.js";
+import { authorizationService } from "../authorization/authorization.service.js";
 
 export class AuthController {
   async login(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -73,6 +74,8 @@ export class AuthController {
         message: "Profil pengguna berhasil diambil.",
         data: {
           user,
+          targetDashboard: authorizationService.getDashboardRoute(user.role),
+          permissions: authorizationService.getRolePermissions(user.role),
         },
       });
     } catch (error: unknown) {
